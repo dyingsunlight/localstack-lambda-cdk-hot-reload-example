@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  localstack:
+    image: localstack/localstack:3.0.2
+    ports:
+      - ":14566:4566"
+      - ":14510-14559:4510-4559"
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID= test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - .dev/localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./projects/server:/var/workspaces/server
+
+  cdk:
+    depends_on:
+      - localstack
+    build:
+      context: projects/
+      dockerfile: dev-cdk.dockerfile
+    environment:
+      NAME: helix-dev
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCOUNT_ID: 000000000000
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      CDK_DEFAULT_ACCOUNT: test
+      CDK_DEFAULT_REGION: us-east-1
+      LAMBDA_MOUNT_CODE: 1
+    volumes:
+      - ./projects/cdk:/var/workspaces/cdk
+      - ./projects/server:/var/workspaces/server
+      # Enforce to use docker container node_modules instead of mounted 'node_modules' directory.
+      - .dev/cdk/override_empty_modules:/var/workspaces/cdk/node_modules
+      - .dev/server/override_empty_modules:/var/workspaces/server/node_modules
+    command: sh dev.sh
+
