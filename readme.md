@@ -1,4 +1,4 @@
-``# Getting start
+# Getting start
 This is a minimal example that using following things:
 - docker compose 
 - localstack start aws lambda in hot-reload.
