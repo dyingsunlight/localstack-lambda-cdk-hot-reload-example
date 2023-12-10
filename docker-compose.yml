@@ -4,8 +4,8 @@ services:
   localstack:
     image: localstack/localstack:3.0.2
     ports:
-      - ":14566:4566"
-      - ":14510-14559:4510-4559"
+      - ":4566:4566"
+      - ":4510-4559:4510-4559"
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - AWS_ACCESS_KEY_ID= test
@@ -15,13 +15,14 @@ services:
       - .dev/localstack:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
       - ./projects/server:/var/workspaces/server
+      - ${PWD}:${PWD}:ro
 
   cdk:
     depends_on:
       - localstack
     build:
       context: projects/
-      dockerfile: dev-cdk.dockerfile
+      dockerfile: projects/cdk.dockerfile
     environment:
       NAME: helix-dev
       AWS_ENDPOINT_URL: http://localstack:4566
@@ -32,6 +33,7 @@ services:
       CDK_DEFAULT_ACCOUNT: test
       CDK_DEFAULT_REGION: us-east-1
       LAMBDA_MOUNT_CODE: 1
+      SERVER_DIR: ${PWD}
     volumes:
       - ./projects/cdk:/var/workspaces/cdk
       - ./projects/server:/var/workspaces/server

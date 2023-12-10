@@ -11,6 +11,5 @@
     "type": "git",
     "url": "https://github.com/dyingsunlight/helix.git"
   },
-  "private": true,
-  "dependencies": {}
+  "private": true
 }

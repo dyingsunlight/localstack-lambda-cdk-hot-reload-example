@@ -1,63 +1,91 @@
-# Getting start
-This is a minimal example that localstack fails to start lambda hot-reload.
+``# Getting start
+This is a minimal example that using following things:
+- docker compose 
+- localstack start aws lambda in hot-reload.
+- aws cdk
 
-## How to reproduce
+The only thing requirement is docker, starts with command: `docker compose up`
 
-simple install docker and command `docker compose up` to start.
-
-```
-localstack-hot-reload-cdk-1         | Outputs:
-localstack-hot-reload-cdk-1         | test-localstack-hot-reload.RestAPIEndpointB14C3C54 = https://ysmwcnfjml.execute-api.localhost.localstack.cloud:4566/prod/
-```
-when localstack deploy succeed, modify and visit the link:
-```
-https://<RestAPIEndpoint>.execute-api.localhost.localstack.cloud:14566/prod/hello-world
-```
-And you may see the error logs.
-```logs
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:40.911  INFO --- [   asgi_gw_2] l.u.container_networking   : Determined main container network: localstack-hot-reload_default
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:40.918  INFO --- [   asgi_gw_2] l.u.container_networking   : Determined main container target IP: 172.22.0.2
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.393  WARN --- [   asgi_gw_3] l.s.l.i.executor_endpoint  : Execution environment startup failed: {"errorType":"Runtime.ImportModuleError","errorMessage":"Error: Cannot fin
-d module '/var/task/lambda/hello-world.js'\nRequire stack:\n- /var/runtime/index.mjs","trace":["Runtime.ImportModuleError: Error: Cannot find module '/var/task/lambda/hello-world.js'","Require stack:","- /var/runtime/index.mjs",
-"    at _loadUserApp (file:///var/runtime/index.mjs:1087:17)","    at async UserFunction.js.module.exports.load (file:///var/runtime/index.mjs:1119:21)","    at async start (file:///var/runtime/index.mjs:1282:23)","    at async 
-file:///var/runtime/index.mjs:1288:1"]}
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.393  INFO --- [   asgi_gw_3] localstack.request.http    : POST /_localstack_lambda/2afb0fc5ca2d29fa8aafa6e3374a57c1/status/2afb0fc5ca2d29fa8aafa6e3374a57c1/error => 202
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.393  WARN --- [   asgi_gw_2] l.s.l.i.execution_environm : Failed to start execution environment 2afb0fc5ca2d29fa8aafa6e3374a57c1: Environment startup failed
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.393  WARN --- [   asgi_gw_2] l.s.l.i.execution_environm : Execution environment 2afb0fc5ca2d29fa8aafa6e3374a57c1 for function arn:aws:lambda:us-east-1:000000000000:functi
-on:hello-world:$LATEST failed during startup. Check for errors during the startup of your Lambda function.
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.718  WARN --- [   asgi_gw_0] l.s.apigateway.integration : Lambda output should follow the next JSON format: { "isBase64Encoded": true|false, "statusCode": httpStatusCode,
- "headers": { "headerName": "headerValue", ... },"body": "..."}
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.718  INFO --- [   asgi_gw_0] localstack.request.http    : GET /prod/hello-world => 502
-localstack-hot-reload-localstack-1  | 2023-12-09T18:50:41.821  INFO --- [   asgi_gw_3] localstack.request.http    : GET /favicon.ico => 404
+## Notice
+### Window user must enable wsl2 with docker desktop.
+And uses wsl to run docker compose.
+```shell
+wsl docker compose up
 ```
 
-## Another way make it works
-if change the lambda code source from hot reload bucket to zip assets, then the error disappeared and everything works fine.
+## What is important?
+The key is how to run a docker container in a docker container. 
+Volume binding are only will work from `host` to `container` instead of from `container` to `container`. 
+Which means you must pass the `host`  binding volume path fully to your `container` to create a new `container` likes the aws sam lambda invoke.
+Otherwise, you will encounter issue likes:
 
+localstack mount code (hot-reload):
+```
+WARN --- [   asgi_gw_3] l.s.l.i.executor_endpoint  : Execution environment startup failed: {"errorType":"Runtime.ImportModuleError","errorMessage":"Error: Cannot fin
+d module 'hello-world'\nRequire stack:\n- /var/runtime/index.mjs","trace":["Runtime.ImportModuleError: Error: Cannot find module 'hello-world'","Require stack:","- /var/runtime/index.mjs","    at _loadUserApp (file:///var/runtim
+e/index.mjs:1087:17)","    at async UserFunction.js.module.exports.load (file:///var/runtime/index.mjs:1119:21)","    at async start (file:///var/runtime/index.mjs:1282:23)","    at async file:///var/runtime/index.mjs:1288:1"]}
+```
+or
+try to run aws sam in container errors:
+```
+undefined       ERROR   Uncaught Exception      {"errorType":"Runtime.ImportModuleError","errorMessage":"Error: Cannot find module 'app'\nRequire stack:\n- /var/runtime/index.mjs",
+ile:///var/runtime/index.mjs:1119:21)","    at async start (file:///var/runtime/index.mjs:1282:23)","    at async file:///var/runtime/index.mjs:1288:1"]}
+```
 
-`projects/cdk/lib/dev-app.ts` find the code
-```typescript
-const lambda = new Function(this, route.name, {
-  functionName: route.name,
-  runtime: Runtime.NODEJS_18_X,
-  timeout: cdk.Duration.seconds(120),
-  handler: route.handler,
-  code: Code.fromBucket(
-    hotReloadingBucket,
-    path.resolve(serverDir)
-  ),
-  // code: Code.fromAsset(path.resolve(serverDir)),
-  memorySize: 128,
-})
+### Fix the error
+Add `- ${PWD}:${PWD}:ro` volume binding in the docker compose file.
 ```
-Change it to
-```typescript
-const lambda = new Function(this, route.name, {
-  functionName: route.name,
-  runtime: Runtime.NODEJS_18_X,
-  timeout: cdk.Duration.seconds(120),
-  handler: route.handler,
-  code: Code.fromAsset(path.resolve(serverDir)),
-  memorySize: 128,
-})
+version: "3.9"
+
+services:
+  localstack:
+    image: localstack/localstack:3.0.2
+    ports:
+      - ":4566:4566"
+      - ":4510-4559:4510-4559"
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID= test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - .dev/localstack:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./projects/server:/var/workspaces/server
+      - ${PWD}:${PWD}:ro
 ```
+Or for aws sam user:
+```
+version: "3.9"
+
+services:
+  sam:
+    build:
+      dockerfile: sam.Dockerfile
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - SAM_CLI_CONTAINER_CONNECTION_TIMEOUT=180
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock #Needed so a docker container can be run from inside a docker container
+      - ~/.aws/:/root/.aws:ro
+      - ${PWD}:${PWD}:ro
+    working_dir: /${PWD}
+    command:
+      - sam
+      - local
+      - start-api
+      - --debug
+      - --template
+      - template.yaml
+      - --host
+      - 0.0.0.0
+      - --skip-pull-image
+      - --container-host
+      - host.docker.internal
+      - --docker-volume-basedir # This is necessary for sam command to mount the directory.
+      - ${PWD}
+    ports:
+      - "9001:3000"
+```
+
+You can always 

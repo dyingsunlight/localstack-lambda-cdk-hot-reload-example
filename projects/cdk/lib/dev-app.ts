@@ -30,11 +30,7 @@ class AppStack extends cdk.Stack {
         "service-role/AWSLambdaBasicExecutionRole"
       )
     )
-    const hotReloadingBucket = Bucket.fromBucketName(
-      this,
-      "HotReloadingBucket",
-      "hot-reload"
-    )
+
     const api = new RestApi(this, "RestAPI", {
       defaultCorsPreflightOptions: {
         allowOrigins: Cors.ALL_ORIGINS,
@@ -42,7 +38,8 @@ class AppStack extends cdk.Stack {
       },
     })
 
-    const serverDir = '../server'
+    const serverDir = path.resolve(process.env.SERVER_DIR as string, 'projects/server')
+    console.log('serverDir', serverDir)
     const serverRoutes = [
       {
         name: 'hello-world',
@@ -51,6 +48,11 @@ class AppStack extends cdk.Stack {
         methods: ['GET']
       }
     ]
+    const hotReloadingBucket = Bucket.fromBucketName(
+        this,
+        "hot-reload",
+        "hot-reload"
+    )
     for (const route of serverRoutes) {
       const lambda = new Function(this, route.name, {
         functionName: route.name,
@@ -60,7 +62,7 @@ class AppStack extends cdk.Stack {
         // This hot reload bucket source are not working for now.
         code: Code.fromBucket(
           hotReloadingBucket,
-          path.resolve(serverDir)
+            serverDir
         ),
         // This will works fine.
         // code: Code.fromAsset(path.resolve(serverDir)),
